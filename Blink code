@@ -1,0 +1,171 @@
+from imutils.video import VideoStream
+#from imutils.video import VideoWriter
+#import imutils.video
+import cv2
+import dlib
+import math
+import time as t
+from time import time
+from matplotlib import pyplot as plt
+import pandas as pd
+
+COUNTER = int()
+TOTAL = int()
+BLINKS = int()
+EAR = float()
+EYE_CLOSE = float()
+graph = []
+blink_per_min = []
+cur_time = time()
+blink_time = time()
+dont_sleep = time()
+array_ear = [1]
+MIG = 0
+wake_up = 0
+dont_sleep_blink = int()
+tested = []
+
+# Start of VideoStream
+
+vs = VideoStream(src=0).start()
+
+detector = dlib.get_frontal_face_detector()
+# built-in face detection cascade (frontal view) from dlib Histogram method of oriented gradients
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+# built-in cascade of placement of 68 characteristic points on the face
+COUNTER: int = 0 #its for counting frame frequancy, total amount of frames
+TOTAL = 0
+ALERT = 0
+freq = 0
+while True:
+    t.sleep(0.03)
+    #count_time = time()
+    img = vs.read() # Getting an image from a videostream
+    gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)    # Converting an image to black and white with help of fuction cvtColor from library OpenCV
+
+    faces = detector(gray_img)  # Face detection and construction of a rectangular contour dlib method HOG 
+
+    for face in faces:   # Bypassing the list of all faces in the image
+        cv2.putText(img, "{} face(s) found".format(len(faces)), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255),
+                    2)  # Output Text number of faces in the image in OpenCV
+# Obtaining the coordinates of the vertices of the rectangle and its construction on the image
+        xr1 = face.left()
+        yr1 = face.top()
+        xr2 = face.right()
+        yr2 = face.bottom()
+        cv2.rectangle(img, (xr1, yr1), (xr2, yr2), (255, 0, 0), 1) #Plotting a rectangle in OpenCV
+
+        # Obtaining the coordinates of control points and plotting them on the DliB image
+        landmarks = predictor(gray_img, face)
+        for n in range(36,48):  #from 36 to 47 - 12 points
+            x = landmarks.part(n).x
+            y = landmarks.part(n).y
+            cv2.circle(img, (x, y), 3, (0, 0, 255), -1)
+        for n in range(0, 35):
+            x = landmarks.part(n).x
+            y = landmarks.part(n).y
+            cv2.circle(img, (x, y), 1, (255, 0, 0), -1)
+        for n in range(48, 68):
+            x = landmarks.part(n).x
+            y = landmarks.part(n).y
+            cv2.circle(img, (x, y), 1, (255, 0, 0), -1)
+
+        x1 = landmarks.part(36).x
+        y1 = landmarks.part(36).y
+
+        x2 = landmarks.part(37).x
+        y2 = landmarks.part(37).y
+
+        x3 = landmarks.part(38).x
+        y3 = landmarks.part(38).y
+
+        x4 = landmarks.part(39).x
+        y4 = landmarks.part(39).y
+
+        x5 = landmarks.part(40).x
+        y5 = landmarks.part(40).y
+
+        x6 = landmarks.part(41).x
+        y6 = landmarks.part(41).y
+
+        A = math.hypot(x2 - x6, y2 - y6)
+        B = math.hypot(x3 - x5, y3 - y5)
+        C = math.hypot(x1 - x4, y1 - y4)
+
+        EAR = ((A + B) / (2.0 * C)) # formula for calculating eye opening width (eye aspect ratio)
+
+        if len(array_ear) < 50:
+            array_ear.append(EAR)
+            cv2.putText(img, 'CALIBRATION IN PROGRESS', (540, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 0, 0), 2)
+            cv2.putText(img, 'PLEASE DO NOT BLINK ', (580, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 0, 0), 2)
+        else:
+            EYE_CLOSE = pd.Series(array_ear).median() * 0.6
+            #EYE_CLOSE = 0.17
+            LIM_COUNTER = 60
+            LOW_COUNTER = 4
+
+             #amount of blinks
+
+            graph.append(EAR)
+            if EAR < EYE_CLOSE:
+                TOTAL += 1
+                BLINKS += 1
+                COUNTER += 1
+                MIG = 1
+            else:
+                COUNTER += 1
+                MIG = 0
+            if time() - blink_time > 10:
+                blink_time = time()
+                to_save = BLINKS
+                blink_per_min.append(to_save)
+                BLINKS = 0
+            if time() - dont_sleep > 5:
+                dont_sleep = time()
+                if BLINKS - dont_sleep_blink >= 10:
+                    wake_up = 1
+                else:
+                    wake_up = 0
+                dont_sleep_blink = BLINKS
+
+            if time() - cur_time > 60:
+                cur_time = time()
+                #to_save = TOTAL
+                #blink_per_min.append(to_save)
+                if TOTAL > LIM_COUNTER or TOTAL < LOW_COUNTER: #amount of blinks more then upper threshold
+                    ALERT = 1
+                else:
+                    ALERT = 0
+                TOTAL = 0
+
+    cv2.putText(img, "Push ESC to return",  (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    cv2.putText(img, str(COUNTER), (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(img, str(TOTAL), (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(img, "{:.2f}".format(float(EAR)), (20, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(img, str(blink_per_min), (20, 360), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    cv2.putText(img, "{:.2f}".format(float(EYE_CLOSE)), (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    #if MIG == 1:
+    #    cv2.putText(img, "BLINK", (20, 180), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    if ALERT == 1:
+        cv2.putText(img, "ALARM!!!", (180, 180), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+    if wake_up == 1:
+        cv2.putText(img, "STAY FOCUSED", (620, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    # Output of converted OpenCV image
+    cv2.imshow("Image", img)
+
+    # Press ESC to exit the loop
+    key = cv2.waitKey(10)#delay
+
+    if key == 27:
+        break
+    #per_one = time() - count_time
+    #tested.append(per_one)
+
+blinks_frame = pd.DataFrame(blink_per_min)
+blinks_frame.hist()
+plt.title('Blink frequency distribution (normal)')
+plt.xlabel('Blink rate per minute')
+#plt.plot(graph)
+plt.show()
+print(blink_per_min)
+
